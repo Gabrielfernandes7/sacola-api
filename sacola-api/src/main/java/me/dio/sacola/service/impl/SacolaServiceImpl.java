@@ -1,5 +1,4 @@
 package me.dio.sacola.service.impl;
-
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -7,7 +6,9 @@ import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 import me.dio.sacola.enumeration.FormaPagamento;
 import me.dio.sacola.model.Item;
+import me.dio.sacola.model.Restaurante;
 import me.dio.sacola.model.Sacola;
+import me.dio.sacola.repository.ItemRepository;
 import me.dio.sacola.repository.ProdutoRepository;
 import me.dio.sacola.repository.SacolaRepository;
 import me.dio.sacola.resource.dto.ItemDto;
@@ -19,22 +20,44 @@ public class SacolaServiceImpl implements SacolaService {
 
     private final SacolaRepository sacolaRepository;
     private final ProdutoRepository produtoRepository;
+    private final ItemRepository itemRepository;
 
     @Override
     public Item incluirItemNaSacola(ItemDto itemDto) {
         Sacola sacola = verSacola(itemDto.getIdSacola());
 
         if (sacola.isFechado()) {
-            throw new RuntimeException("Esta sacola está fechada.");
+            throw new RuntimeException("Este produto não existe.");
         }
 
-        Item.builder()
+        Item itemParaSerInserido = Item.builder()
             .quantidade(itemDto.getQuantidade())
             .sacola(sacola)
-            .produto(produtoRepository.findById(itemDto))
+            .produto(produtoRepository.findById(itemDto.getProdutoId()).orElseThrow(
+                () -> {
+                    throw new RuntimeException("Essa sacola não existe !");
+                }
+            ))
             .build();
 
-        return null;
+        List<Item> itensDaSacola = sacola.getItens();
+
+        if (itensDaSacola.isEmpty()) {
+            itensDaSacola.add(itemParaSerInserido);
+        } else {
+            Restaurante restauranteAtual = itensDaSacola.get(0).getProduto().getRestaurante();
+            Restaurante restauranteDoItemParaAdicionar = itemParaSerInserido.getProduto().getRestaurante();
+
+            if (restauranteAtual.equals(restauranteDoItemParaAdicionar)) {
+                itensDaSacola.add(itemParaSerInserido);
+            } else {
+                throw new RuntimeException("Não é possível adicionar produtos de restaurantes diferentes");
+            }
+        }
+
+        sacolaRepository.save(sacola);
+
+        return itemRepository.save(itemParaSerInserido);
     }
 
     @Override
